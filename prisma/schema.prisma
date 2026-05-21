@@ -1,0 +1,319 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  SUPER_ADMIN
+  SCHOOL_ADMIN
+  TEACHER
+  STUDENT
+  PARENT
+  ACCOUNTANT
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  HALF_DAY
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+}
+
+model School {
+  id              String   @id @default(uuid())
+  name            String
+  subdomain       String   @unique
+  logoUrl         String?
+  address         String?
+  contactEmail    String?
+  contactPhone    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  users           User[]
+  students        Student[]
+  teachers        Teacher[]
+  parents         Parent[]
+  academicYears   AcademicYear[]
+  classes         Class[]
+  notices         Notice[]
+  feeCategories   FeeCategory[]
+}
+
+model User {
+  id            String   @id // Corresponds to Supabase Auth UUID
+  email         String   @unique
+  name          String
+  role          Role
+  phone         String?
+  avatarUrl     String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  schoolId      String?
+  school        School?  @relation(fields: [schoolId], references: [id])
+
+  // Relations to specific profiles
+  studentProfile Student?
+  teacherProfile Teacher?
+  parentProfile  Parent?
+}
+
+model AcademicYear {
+  id        String   @id @default(uuid())
+  name      String   // e.g., "2080-2081" or "2023-2024"
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean  @default(false)
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id])
+
+  classes   Class[]
+}
+
+model Class {
+  id             String       @id @default(uuid())
+  name           String       // e.g., "Class 10"
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+  schoolId       String
+  school         School       @relation(fields: [schoolId], references: [id])
+
+  sections       Section[]
+  subjects       Subject[]
+}
+
+model Section {
+  id        String   @id @default(uuid())
+  name      String   // e.g., "A", "B", "Rose"
+  classId   String
+  class     Class    @relation(fields: [classId], references: [id])
+
+  students  Student[]
+  timetables Timetable[]
+}
+
+model Subject {
+  id          String   @id @default(uuid())
+  name        String
+  code        String?
+  classId     String
+  class       Class    @relation(fields: [classId], references: [id])
+  
+  teacherId   String?
+  teacher     Teacher? @relation(fields: [teacherId], references: [id])
+
+  attendances Attendance[]
+  homeworks   Homework[]
+  exams       Exam[]
+}
+
+model Student {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id])
+  schoolId         String
+  school           School   @relation(fields: [schoolId], references: [id])
+
+  admissionNumber  String   @unique
+  rollNumber       Int?
+  dob              DateTime?
+  gender           Gender?
+  bloodGroup       String?
+  emergencyContact String?
+
+  parentId         String?
+  parent           Parent?  @relation(fields: [parentId], references: [id])
+
+  sectionId        String?
+  section          Section? @relation(fields: [sectionId], references: [id])
+
+  attendances      Attendance[]
+  submissions      Submission[]
+  examResults      ExamResult[]
+  feeInvoices      FeeInvoice[]
+}
+
+model Parent {
+  id               String    @id @default(uuid())
+  userId           String    @unique
+  user             User      @relation(fields: [userId], references: [id])
+  schoolId         String
+  school           School    @relation(fields: [schoolId], references: [id])
+
+  occupation       String?
+  address          String?
+
+  children         Student[]
+}
+
+model Teacher {
+  id               String    @id @default(uuid())
+  userId           String    @unique
+  user             User      @relation(fields: [userId], references: [id])
+  schoolId         String
+  school           School    @relation(fields: [schoolId], references: [id])
+
+  employeeId       String    @unique
+  qualification    String?
+  joinDate         DateTime?
+
+  subjects         Subject[]
+  homeworksCreated Homework[]
+}
+
+model Attendance {
+  id        String   @id @default(uuid())
+  date      DateTime
+  status    AttendanceStatus
+  remark    String?
+
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id])
+
+  subjectId String?
+  subject   Subject? @relation(fields: [subjectId], references: [id])
+
+  @@unique([date, studentId, subjectId])
+}
+
+model Homework {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  dueDate     DateTime
+  attachments String[] // Array of URLs
+
+  subjectId   String
+  subject     Subject  @relation(fields: [subjectId], references: [id])
+
+  teacherId   String
+  teacher     Teacher  @relation(fields: [teacherId], references: [id])
+
+  submissions Submission[]
+}
+
+model Submission {
+  id          String   @id @default(uuid())
+  content     String?
+  attachments String[] // Array of URLs
+  submittedAt DateTime @default(now())
+  grade       String?
+  feedback    String?
+
+  homeworkId  String
+  homework    Homework @relation(fields: [homeworkId], references: [id])
+
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id])
+
+  @@unique([homeworkId, studentId])
+}
+
+model Exam {
+  id          String   @id @default(uuid())
+  name        String   // e.g., "First Term Exam"
+  date        DateTime
+  maxMarks    Float
+  passMarks   Float
+
+  subjectId   String
+  subject     Subject  @relation(fields: [subjectId], references: [id])
+
+  results     ExamResult[]
+}
+
+model ExamResult {
+  id        String   @id @default(uuid())
+  marksObtained Float
+  grade     String?
+  remarks   String?
+
+  examId    String
+  exam      Exam     @relation(fields: [examId], references: [id])
+
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id])
+
+  @@unique([examId, studentId])
+}
+
+model FeeCategory {
+  id          String   @id @default(uuid())
+  name        String   // e.g., "Tuition Fee", "Transport Fee"
+  description String?
+  amount      Float
+  
+  schoolId    String
+  school      School   @relation(fields: [schoolId], references: [id])
+
+  invoices    FeeInvoice[]
+}
+
+model FeeInvoice {
+  id            String   @id @default(uuid())
+  dueDate       DateTime
+  amount        Float
+  status        PaymentStatus @default(PENDING)
+
+  studentId     String
+  student       Student  @relation(fields: [studentId], references: [id])
+
+  feeCategoryId String
+  feeCategory   FeeCategory @relation(fields: [feeCategoryId], references: [id])
+
+  payments      Payment[]
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  amountPaid    Float
+  paymentDate   DateTime @default(now())
+  paymentMethod String   // e.g., "CASH", "eSewa", "Khalti"
+  transactionId String?
+
+  feeInvoiceId  String
+  feeInvoice    FeeInvoice @relation(fields: [feeInvoiceId], references: [id])
+}
+
+model Notice {
+  id          String   @id @default(uuid())
+  title       String
+  content     String
+  isPublished Boolean  @default(true)
+  targetAudience Role[] // e.g., [STUDENT, PARENT, TEACHER] (empty for all)
+  createdAt   DateTime @default(now())
+
+  schoolId    String
+  school      School   @relation(fields: [schoolId], references: [id])
+}
+
+model Timetable {
+  id        String   @id @default(uuid())
+  dayOfWeek Int      // 0-6
+  startTime DateTime @db.Time
+  endTime   DateTime @db.Time
+
+  sectionId String
+  section   Section  @relation(fields: [sectionId], references: [id])
+}
